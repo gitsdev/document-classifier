@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Document Classifier — Powered by Claude</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    color: #2d3748;
+  }
+  .container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 40px 20px;
+  }
+  header { text-align: center; color: #fff; margin-bottom: 30px; }
+  header h1 { margin: 0 0 8px; font-size: 2.2rem; }
+  header p { margin: 0; opacity: 0.9; }
+  .card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 30px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    margin-bottom: 20px;
+  }
+  .drop-zone {
+    border: 3px dashed #cbd5e0;
+    border-radius: 10px;
+    padding: 50px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: #f7fafc;
+  }
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: #667eea;
+    background: #ebf4ff;
+  }
+  .drop-zone-icon {
+    font-size: 3rem;
+    margin-bottom: 12px;
+    opacity: 0.6;
+  }
+  .drop-zone p { margin: 6px 0; }
+  .drop-zone .small { color: #718096; font-size: 0.9rem; }
+  #fileInput { display: none; }
+  .file-list {
+    margin-top: 20px;
+    list-style: none;
+    padding: 0;
+  }
+  .file-list li {
+    padding: 10px 14px;
+    background: #f7fafc;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.92rem;
+  }
+  .file-list .remove {
+    background: none;
+    border: none;
+    color: #e53e3e;
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 0 6px;
+  }
+  .actions {
+    margin-top: 20px;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+  }
+  button.primary {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: #fff;
+    border: none;
+    padding: 12px 28px;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+  button.primary:hover:not(:disabled) { transform: translateY(-1px); }
+  button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.secondary {
+    background: #edf2f7;
+    color: #2d3748;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+  }
+  th, td {
+    text-align: left;
+    padding: 12px 14px;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 0.95rem;
+  }
+  th { background: #f7fafc; font-weight: 600; color: #4a5568; }
+  tr.processing td { color: #718096; font-style: italic; }
+  tr.error td { color: #c53030; }
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    background: #c6f6d5;
+    color: #22543d;
+  }
+  .badge.unknown { background: #fed7d7; color: #742a2a; }
+  .summary { font-size: 0.95rem; }
+  .spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid #cbd5e0;
+    border-top-color: #667eea;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>📄 Document Classifier</h1>
+    <p>Upload documents and let Claude identify the type and client name</p>
+  </header>
+
+  <div class="card">
+    <div id="dropZone" class="drop-zone">
+      <div class="drop-zone-icon">📤</div>
+      <p><strong>Drop files here</strong> or click to browse</p>
+      <p class="small">Supports PDFs, images (PNG, JPG, GIF, WEBP), and text files</p>
+      <input type="file" id="fileInput" multiple accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.txt">
+    </div>
+
+    <ul id="fileList" class="file-list"></ul>
+
+    <div class="actions">
+      <button class="secondary" id="clearBtn" type="button">Clear</button>
+      <button class="primary" id="analyzeBtn" type="button" disabled>Analyze Documents</button>
+    </div>
+  </div>
+
+  <div class="card hidden" id="resultsCard">
+    <h2 style="margin-top:0;">Results</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>File</th>
+          <th>Document Type</th>
+          <th>Client Name</th>
+          <th>Summary</th>
+        </tr>
+      </thead>
+      <tbody id="resultsBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const fileList = document.getElementById('fileList');
+const analyzeBtn = document.getElementById('analyzeBtn');
+const clearBtn = document.getElementById('clearBtn');
+const resultsCard = document.getElementById('resultsCard');
+const resultsBody = document.getElementById('resultsBody');
+
+let selectedFiles = [];
+
+dropZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', (e) => addFiles(e.target.files));
+
+['dragenter', 'dragover'].forEach(ev => {
+  dropZone.addEventListener(ev, (e) => {
+    e.preventDefault();
+    dropZone.classList.add('dragover');
+  });
+});
+['dragleave', 'drop'].forEach(ev => {
+  dropZone.addEventListener(ev, (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+  });
+});
+dropZone.addEventListener('drop', (e) => addFiles(e.dataTransfer.files));
+
+function addFiles(fileObjs) {
+  for (const f of fileObjs) {
+    selectedFiles.push(f);
+  }
+  renderFileList();
+}
+
+function renderFileList() {
+  fileList.innerHTML = '';
+  selectedFiles.forEach((f, i) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<span>📎 ${escapeHtml(f.name)} <span class="small">(${formatBytes(f.size)})</span></span>`;
+    const btn = document.createElement('button');
+    btn.className = 'remove';
+    btn.textContent = '✕';
+    btn.onclick = () => { selectedFiles.splice(i, 1); renderFileList(); };
+    li.appendChild(btn);
+    fileList.appendChild(li);
+  });
+  analyzeBtn.disabled = selectedFiles.length === 0;
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+clearBtn.addEventListener('click', () => {
+  selectedFiles = [];
+  fileInput.value = '';
+  renderFileList();
+  resultsCard.classList.add('hidden');
+  resultsBody.innerHTML = '';
+});
+
+analyzeBtn.addEventListener('click', async () => {
+  if (selectedFiles.length === 0) return;
+  analyzeBtn.disabled = true;
+  resultsCard.classList.remove('hidden');
+  resultsBody.innerHTML = '';
+
+  // Add a placeholder row for each file
+  const rows = selectedFiles.map((f) => {
+    const tr = document.createElement('tr');
+    tr.className = 'processing';
+    tr.innerHTML = `
+      <td>${escapeHtml(f.name)}</td>
+      <td colspan="3"><span class="spinner"></span> Analyzing...</td>
+    `;
+    resultsBody.appendChild(tr);
+    return tr;
+  });
+
+  // Process files one at a time so each shows results as it finishes
+  for (let i = 0; i < selectedFiles.length; i++) {
+    const file = selectedFiles[i];
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('analyze.php', { method: 'POST', body: formData });
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        rows[i].className = 'error';
+        rows[i].innerHTML = `
+          <td>${escapeHtml(file.name)}</td>
+          <td colspan="3">⚠️ ${escapeHtml(data.error || 'Failed to analyze')}</td>
+        `;
+      } else {
+        const isUnknown = !data.client_name || data.client_name.toLowerCase() === 'unknown';
+        rows[i].className = '';
+        rows[i].innerHTML = `
+          <td>${escapeHtml(file.name)}</td>
+          <td><span class="badge ${data.document_type ? '' : 'unknown'}">${escapeHtml(data.document_type || 'Unknown')}</span></td>
+          <td>${isUnknown ? '<em style="color:#a0aec0">Not detected</em>' : escapeHtml(data.client_name)}</td>
+          <td class="summary">${escapeHtml(data.summary || '')}</td>
+        `;
+      }
+    } catch (err) {
+      rows[i].className = 'error';
+      rows[i].innerHTML = `
+        <td>${escapeHtml(file.name)}</td>
+        <td colspan="3">⚠️ ${escapeHtml(err.message)}</td>
+      `;
+    }
+  }
+
+  analyzeBtn.disabled = false;
+});
+</script>
+</body>
+</html>
