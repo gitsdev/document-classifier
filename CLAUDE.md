@@ -33,5 +33,7 @@ A PHP web app that uses the Claude API to classify uploaded documents (PDFs, ima
 
 ## Git / GitHub
 
-- Repo lives at: _(fill in once pushed)_
-- `.gitignore` excludes `config.php`, `.env`, OS/editor cruft.
+- Repo: https://github.com/gitsdev/document-classifier (private)
+- Default branch: `main`
+- `.gitignore` excludes `config.php`, `.env`, `.claude/`, OS/editor cruft.
+- Auth: GitHub CLI (`~/bin/gh`) authenticated as `gitsdev`. To push from a new shell, `~/bin/gh` needs to be on `PATH` — run `export PATH="$HOME/bin:$PATH"` or add it to `~/.zshrc`.
